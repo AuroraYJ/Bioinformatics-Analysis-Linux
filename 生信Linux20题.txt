@@ -1,0 +1,190 @@
+##2022年8月12日
+##试题来源于生信菜鸟团论坛的生信人的linux考试：http://www.bio-info-trainee.com/2900.html
+
+一、在任意文件夹下面创建形如 1/2/3/4/5/6/7/8/9 格式的文件夹系列
+cd ~/AuroraYJ
+mkdir -p 1/2/3/4/5/6/7/8/9
+sudo apt  install tree
+tree  ~/AuroraYJ
+
+二、在创建好的文件夹下面，比如我的是 /Users/jimmy/tmp/1/2/3/4/5/6/7/8/9 ，里面创建文本文件 me.txt
+cd ~/AuroraYJ/1/2/3/4/5/6/7/8/9
+touch me.txt
+或者
+sudo apt install vim 
+vim me.txt
+
+三、在文本文件 me.txt 里面输入内容:
+Go to: http://www.biotrainee.com/
+I love bioinfomatics.
+And you ?
+方法1：
+nano me.txt
+cat me.txt
+方法2：
+sudo apt install vim
+vim me.txt
+键盘按键i：插入模式
+键盘ESC：退出插入模式
+键盘:（冒号）：编辑模式
+:wq 退出并保存
+cat me.txt
+
+四、删除上面创建的文件夹 1/2/3/4/5/6/7/8/9 及文本文件 me.txt
+rm -r *
+
+五、在任意文件夹下面创建 folder1~5这5个文件夹，然后每个文件夹下面继续创建 folder1~5这5个文件夹
+方法一：
+nano folder.sh
+#!/bin/bash
+#
+for I in {1..5}
+do
+  mkdir -p folder$I
+  echo "The new folder:" folder$I
+  for j in {1..5}
+  do
+  mkdir -p ./folder$I/folder$j
+  done
+done
+chmod +x folder.sh
+bash folder.sh
+方法二：
+mkdir -pv folder_{1..5}/folder_{1..5}
+#-p ：如果存在则没有错误，根据需要创建父目录
+#-v ：显示创建过程
+
+六、在第五题创建的每一个文件夹下面都创建第二题文本文件 me.txt ，内容也要一样
+nano folder.sh
+#!/bin/bash
+#
+for I in {1..5}
+do
+  mkdir -p folder$I
+  echo "The new folder:" folder$I
+  for j in {1..5}
+  do
+  mkdir -p ./folder$I/folder$j
+  touch  ./folder$I/folder$j/me.txt
+  echo -e "Go to: http://www.biotrainee.com/ \n I love bioinfomatics.\n And you?">> ./folder$I/folder$j/me.txt
+  echo "The new text in" folder$I/folder$j
+  done
+done
+chmod +x folder.sh
+bash folder.sh
+
+七，再次删除掉前面几个步骤建立的文件夹及文件
+方法一：rm -r *
+方法二：rm -r folder_*
+
+八、下载 http://www.biotrainee.com/jmzeng/igv/test.bed 文件，在里面选择含有 H3K4me3 的那一行是第几行，该文件总共有几行
+wget  http://www.biotrainee.com/jmzeng/igv/test.bed
+grep -n -e H3K4me3 test.bed
+## 输出结果：8:chr1	9810	10438	ID=SRX387603;Name=H3K4me3%20(@%20HMLE);Title=GSM1280527:%20HMLE%20Twist3D%20H3K4me3%20rep2%3B%20Homo%20sapiens%3B%20ChIP-Seq;Cell%20group=Breast;<br>source_name=HMLE_Twist3D_H3K4me3;cell%20type=human%20mammary%20epithelial%20cells;transfected%20with=Twist1;culture%20type=sphere;chip%20antibody=H3K4me3;chip%20antibody%20vendor=Millipore;	222	.	9810	10438	0,226,255
+wc -l test.bed
+## 输出结果：10 test.bed
+
+九、下载 http://www.biotrainee.com/jmzeng/rmDuplicate.zip 文件，并且解压，查看里面的文件夹结构
+wget  http://www.biotrainee.com/jmzeng/rmDuplicate.zip 
+unzip rmDuplicate.zip
+tree ./rmDuplicate
+
+十、打开第九题解压的文件，进入 rmDuplicate/samtools/single 文件夹里面，查看后缀为 .sam 的文件，搞清楚 生物信息学里面的SAM/BAM 定义
+是什么
+cd ./rmDuplicate/samtools/single
+ls -l *sam
+## 输出结果：-rw-rw-r-- 1 AuroraYJ AuroraYJ 11432 11月 12  2016 tmp.sam
+
+十一、安装 samtools 软件
+conda install -c bioconda samtools
+
+十二、打开后缀为BAM 的文件，找到产生该文件的命令。
+ls -l *bam
+samtools view -h tmp.rmdup.bam | less -S
+#less 可以随意浏览文件，支持翻页和搜索，支持向上翻页和向下翻页
+#-S 行过长时间将超出部分舍弃
+cat readme.txt
+samtools view -h tmp.sorted.bam | less -S
+cat readme.txt
+
+十三、根据上面的命令，找到我使用的参考基因组 /home/jianmingzeng/reference/index/bowtie/hg38 具体有多少条染色体
+## 在tmp.header中的“SN：chr**”对应就是参考基因库的染色体条数
+cat tmp.header
+grep -o -E "SN:chr[0-9]+|SN:chr[a-zA-Z]+" tmp.header |sort |uniq |wc -l 
+##输出结果：26
+#-E：表示扩展正则表达式
+#-o：--仅匹配
+               仅打印匹配行的匹配（非空）部分，
+               每个这样的部分都在单独的输出线上
+
+十四、上面的后缀为BAM 的文件的第二列，只有 0 和 16 两个数字，用 cut/sort/uniq等命令统计它们的个数。
+samtools view tmp.sorted.bam|cut -f 2 |sort |uniq -c
+## 输出内容： 29 0
+                      24 16
+#-f 2 ：第二列
+#-c：--计数；按出现次数为行添加前缀
+
+十五、重新打开 rmDuplicate/samtools/paired 文件夹下面的后缀为BAM 的文件，再次查看第二列，并且统计
+cd ~/AuroraYJ/rmDuplicate/samtools/paired
+samtools view tmp.sorted.bam|cut -f 2 |sort |uniq -c
+##输出内容：
+      8 147
+      3 163
+      1 323
+      1 353
+      1 371
+      1 387
+      1 433
+      3 83
+      2 97
+      9 99
+
+十六、下载 http://www.biotrainee.com/jmzeng/sickle/sickle-results.zip 文件，并且解压，查看里面的文件夹结构， 这个文件有2.3M，注意留心下载时间及下载速度。
+cd ~/AuroraYJ
+wget  http://www.biotrainee.com/jmzeng/sickle/sickle-results.zip 
+unzip ./sickle-results.zip
+tree 
+
+十七、解压 sickle-results/single_tmp_fastqc.zip 文件，并且进入解压后的文件夹，找到 fastqc_data.txt 文件，并且搜索该文本文件以 >>开头的有多少行？
+cd  ./sickle-results
+unzip single_tmp_fastqc.zip 
+cd ./single_tmp_fastqc
+cat fastqc_data.txt|grep -o ">>" |wc -l
+## 输出结果：24
+
+十八、下载 http://www.biotrainee.com/jmzeng/tmp/hg38.tss 文件，去NCBI找到TP53/BRCA1等自己感兴趣的基因对应的 refseq数据库 ID，然后找到它们的hg38.tss 文件的哪一行。
+cd ~/AuroraYJ
+wget http://www.biotrainee.com/jmzeng/tmp/hg38.tss 
+cat hg38.tss |grep -n "NM_001347859" 
+##输出结果：66811:NM_001347859	chr10	100183977	100187977	1
+#-n： - 行号
+               在其输入文件中使用从 1 开始的行号作为每行输出的前缀
+
+十九、解析hg38.tss 文件，统计每条染色体的基因个数。
+方法一：
+cat hg38.tss|cut -f 2  | sort |uniq -c
+方法二：
+cat hg38.tss |awk '{print $2}' |sort | uniq -c |grep -v '_'
+#awk '{print $2}' ：取出第二列
+#-v，--反转匹配，选择不匹配的行。
+#grep -v '_'：排除带“_”的染色体行
+
+二十、解析hg38.tss 文件，统计NM和NR开头的序列，了解NM和NR开头的含义
+方法一：
+cat hg38.tss |cut -f 1 |sort |grep -o "NM" |wc -l
+##输出结果：51064
+cat hg38.tss |cut -f 1 |sort |grep -o "NR" |wc -l
+##输出结果：15954
+方法二：
+grep -o -E "NM|NR" hg38.tss |sort |uniq -dc
+##输出结果：
+  51064 NM
+  15954 NR
+#-c，--计数
+               按出现次数为行添加前缀
+#-d，--重复
+               只打印重复的行，每组一个
+
+NM：转录组产物的序列mRNA
+NR：非编码的转录组序列ncRNA
+
