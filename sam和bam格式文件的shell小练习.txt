@@ -1,0 +1,124 @@
+#20220820
+#sam和bam格式文件的shell小练习
+../../bowtie2 -x ../index/lambda_virus -1 reads_1.fq -2 reads_2.fq > tmp.sam
+ samtools view -bS tmp.sam >tmp.bam
+
+1) 统计共多少条reads(pair-end reads这里算一条)参与了比对参考基因组
+cat tmp.sam |grep -v '^@'|cut -f 1|sort |uniq -c |wc -l
+## 输出结果：10000
+
+2) 统计共有多少种比对的类型(即第二列数值有多少种)及其分布
+cat tmp.sam |grep -v '^@'|cut -f 2 |sort |uniq -c
+## 输出结果   
+    125 101
+     16 113
+     24 129
+    153 133
+    165 137
+    213 141
+   4516 147
+    125 153
+      2 161
+   4650 163
+    136 165
+     16 177
+     24 65
+    165 69
+    153 73
+    213 77
+      2 81
+   4650 83
+    136 89
+   4516 99
+
+3)筛选出比对失败的reads，看看序列特征
+# 第六列为简要比对信息表达式，如果值为“*”则表示比对失败
+cat tmp.sam |grep -v '^@'|cut -f 6 |grep "*" |wc 
+## 输出结果：1005    1005    2010
+cat tmp.sam |grep -v '^@'|awk '{if($6=="*")print$10}'|head
+
+4) 比对失败的reads区分成单端失败和双端失败情况，并且拿到序列ID
+#单端失败 ID在比对失败的reads列表中只出现一次
+cat tmp.sam |grep -v '^@'|awk '{if($6=="*")print$1}' |sort |uniq -c |grep -w 1
+#双端失败 ID在比对失败的reads列表中出现两次
+cat tmp.sam |grep -v '^@'|awk '{if($6=="*")print$1}' |sort |uniq -c |grep -w 2
+# grep -w 1 ：强制<模式>仅完全匹配字符1
+
+5) 筛选出比对质量值大于30的情况（看第5列）
+cat tmp.sam |grep -v '^@'|awk '{if($5 >30)print}'|less -S
+
+6) 筛选出比对成功，但是并不是完全匹配的序列
+#第六列出现IDNSHPX其中一个，则表示未完全匹配
+cat tmp.sam |grep -v '^@'|awk '{if($6 ~ "[IDNSHPX]")print}' |less -S
+# ~ 匹配正则表达式
+
+7) 筛选出inset size长度大于1250bp的 pair-end reads
+# 看第九列，大于1250或者小于-1250
+cat tmp.sam |grep -v '^@'|awk '{if($9 >1250 || $9 <-1250)print}'|wc 
+##输出结果：   80    1600   25902
+
+8) 统计参考基因组上面各条染色体的成功比对reads数量
+#看第三列
+cat tmp.sam |grep -v '^@'|cut -f 3 |sort |uniq -c
+## 输出结果
+  426 *
+  19574 gi|9626243|ref|NC_001416.1|
+
+9) 筛选出原始fq序列里面有N的比对情况
+cat tmp.sam |grep -v '^@'|awk '{if($10 ~"N")print}'|wc
+## 输出结果：12934  251331 4881351
+
+10) 筛选出原始fq序列里面有N，但是比对的时候却是完全匹配的情况
+cat tmp.sam |grep -v '^@'|awk '{if($10 ~"N" && $6 !~ "[IDNSHPX*]")print}'|wc 
+## 输出结果：10632  212320 3994276
+
+11) sam文件里面的头文件行数
+cat tmp.sam |grep -c '^@'
+## 输出结果：3
+
+12) sam文件里每一行的tags个数一样吗
+cat tmp.sam |grep -v '^@'|cut -f 12- |less -S
+## 不一致
+
+13) sam文件里每一行的tags个数分别是多少个
+# NF表示字段数，在执行过程中对应于当前的字段数
+cat tmp.sam |grep -v '^@'|cut -f 12- |awk '{print NF}'|sort |uniq -c
+##输出结果：
+    457 1
+    548 2
+    579 8
+  18416 9
+
+14) sam文件里记录的参考基因组染色体长度分别是？
+#头部信息中的LN即为染色体长度
+head -3 tmp.sam
+##输出结果：
+@HD	VN:1.5	SO:unsorted	GO:query
+@SQ	SN:gi|9626243|ref|NC_001416.1|	LN:48502
+@PG	ID:bowtie2	PN:bowtie2	VN:2.4.5	CL:"/home/tyj/AuroraYJ/biosoft/bowtie2-2.4.5-linux-x86_64/example/reads/../../bowtie2-align-s --wrapper basic-0 -x ../index/lambda_virus -1 reads_1.fq -2 reads_2.fq"
+
+15) 找到比对情况有insertion情况的
+#insertion代表第六列包含"I"
+cat tmp.sam|grep -v '^@'|awk '{if($6 ~ "I")print}'
+
+16) 找到比对情况有deletion情况的
+#deletion代表第六列包含"D"
+cat tmp.sam|grep -v '^@'|awk '{if($6 ~ "D")print}'
+
+17）取出位于参考基因组某区域的比对记录，比如 5013到50130 区域
+#看第四列
+cat tmp.sam|grep -v '^@'|awk '{if($4 >=5013 && $4 <=50130)print}'|sort
+
+18) 把sam文件按照染色体以及起始坐标排序
+#看第四列
+cat tmp.sam|grep -v '^@'|awk '{if($4 != 0)print}'|sort -nk 1.2 -nk 4 |less -S
+# if($4 != 0)：去除无法比对的染色体
+# -nk 1.2 ：从第一个域的第二个字符开始排序
+# -nk 4：根据第四列进行排序
+
+19) 找到 102M3D11M 的比对情况，计算其reads片段长度。
+#看第十列
+cat tmp.sam|grep -v '^@'|grep "102M3D11M" |awk '{print length($10)}'
+##输出结果：113
+cat tmp.sam|grep -v '^@'|grep "102M3D11M" |cut -f 10 |wc -m
+##输出结果：114
