@@ -1,0 +1,102 @@
+#20220820
+#fasta和fastq格式文件的shell小练习
+wget https://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.4.5/bowtie2-2.4.5-linux-x86_64.zip
+unzip bowtie2-2.4.5-linux-x86_64.zip
+cd bowtie2-2.4.5-linux-x86_64/example/reads
+
+1)统计reads_1.fq 文件中共有多少条序列信息
+cat reads_1.fq |wc -l
+##输出结果：40000
+
+2)输出所有的reads_1.fq文件中的标识符(即以@开头的那一行)
+cat reads_1.fq | grep @r
+或者
+cat reads_1.fq |paste - - - - |cut -f1
+## paste - - - - ：把文本转换为四列
+
+3)输出reads_1.fq文件中的所有序列信息(即每个序列的第二行)
+cat reads_1.fq |paste - - - - |cut -f2
+
+4)输出以‘+’及其后面的描述信息(即每个序列的第三行)
+cat reads_1.fq |paste - - - - |cut -f3
+
+5)输出质量值信息(即每个序列的第四行)
+cat reads_1.fq |paste - - - - |cut -f4
+
+6)计算reads_1.fq 文件含有N碱基的reads个数
+cat reads_1.fq |paste - - - - |cut -f2 |grep N |wc -l
+##输出结果：6429
+
+7)统计文件中reads_1.fq文件里面的序列的碱基总数
+cat reads_1.fq |paste - - - - |cut -f2 |wc -m
+##输出结果：1098399
+# wc -m：统计字符数
+
+8)计算reads_1.fq 所有的reads中N碱基的总数
+cat reads_1.fq |paste - - - - |cut -f2 |grep N |wc -m
+##输出结果：782897
+
+9)统计reads_1.fq 中测序碱基质量值恰好为Q20的个数
+## Q20对应的是：5
+cat reads_1.fq |paste - - - - |cut -f4 |grep -o "5" |wc
+##输出结果：21369   21369   42738
+
+10)统计reads_1.fq 中测序碱基质量值恰好为Q30的个数
+## Q30 对应的是：？
+cat reads_1.fq |paste - - - - |cut -f4 |grep -o "?" |wc
+##输出结果：21574   21574   43148
+
+11)统计reads_1.fq 中所有序列的第一位碱基的ATCGNatcg分布情况
+cat reads_1.fq |paste - - - - |cut -f2 |cut -c 1 |sort |uniq -c
+##输出结果
+   2184 A
+   2203 C
+   2219 G
+   1141 N
+   2253 T
+# cut -c 1：截取第一个字符
+
+12)将reads_1.fq 转为reads_1.fa文件(即将fastq转化为fasta)
+##取fq文件前两列，将空格换成换行，将@换成>，最后把结果存入reads_1.fa文件
+cat reads_1.fq |paste - - - - |cut -f1,2 |tr '@' '>' |tr  '\t' '\n'  >>reads_1.fa
+# tr ：替换
+
+13)统计上述reads_1.fa文件中共有多少条序列
+cat reads_1.fa|wc -l
+## 20000
+
+14)计算reads_1.fa文件中总的碱基序列的GC数量
+cat reads_1.fa|paste - - |grep -o [GC] |wc
+##输出结果： 529983  529983 1059966
+
+15)删除 reads_1.fa文件中的每条序列的N碱基
+cat reads_1.fa| tr -d 'N'|grep -c N
+##输出结果：0
+#tr -d：删除
+
+16)删除 reads_1.fa文件中的含有N碱基的序列
+cat reads_1.fa|paste - - |grep -v N |tr '\t' '\n' |grep -c N
+## 输出结果：0
+#grep -v：反向取值
+
+17)删除 reads_1.fa文件中的短于65bp的序列
+cat reads_1.fa|paste - - |awk '{if(length($2)>65)print}'
+#awk：处理文本语言
+
+18)删除 reads_1.fa文件每条序列的前后五个碱基
+cat reads_1.fa | awk '{if(NR%2==0){print substr($0,6,length($0)-10)}}'
+# NR表示行，NR%2==0表示行号除以2的余数为0，表明是取每条序列的第二行
+# substr($0,6,length($0)-10）：substr分割字符串，表示是从第二行中的第6个字符提取length($0)-10个字符串
+
+19)删除 reads_1.fa文件中的长于125bp的序列
+cat reads_1.fa |paste - - |awk '{if( length($2)<=125)print}'|tr '\t' '\n'
+
+20)查看reads_1.fq 中每条序列的第一位碱基的质量值的平均值
+# 首先取每条序列的第一位碱基，然后第一个BEGIN将第一位字母转换成质量值，第二个BEGIN计算总的质量值，最后END打印出总的质量值和平均值
+sudo apt install gawk
+cat reads_1.fq |paste - - - - |cut -f2 |cut -c 1 |awk 'BEGIN{for(i=0;i<256;++i) ord[sprintf("%c",i)]=i} BEGIN{count=0}{count+=(ord[$1])} END{print count, count/NR-33}'
+## 输出结果：725360 39.536
+# BEGIN{for(i=0;i<256;++i)：开始质量值=0，且小于256，++表示不断相加
+# ord[sprintf("%c",i)]=i}：ord函数用来将字符转化对应的ascii码
+# BEGIN{count=0}{count+=(ord[$1])}：count开始为0，不断相加
+# END{print count, count/NR-33}：此fq文件的序列编码为Phred+33，碱基质量从0-40，既ASCII码为从“!"(33+0)到"I"(33+40)，因此要减去33，才能获得想要的质量值
