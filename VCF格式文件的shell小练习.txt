@@ -1,0 +1,98 @@
+#20220821
+#VCF格式文件的shell小练习
+#理解vcf格式：用于描述SNP（单个碱基上的变异），INDEL（插入缺失标记）和SV（结构变异位点）结果的文本文件
+#VCF文件分为两部分内容：以“#”开头的注释部分；没有“#”开头的主体部分
+
+conda install -c bioconda bcftools
+../../bowtie2 -x ../index/lambda_virus -1 reads_1.fq -2 reads_2.fq | samtools sort -@ 5 -o tmp.bam - bcftools mpileup -f ../reference/lambda_virus.fa tmp.bam |bcftools call -vm > tmp.vcf
+
+1、把突变记录的vcf文件区分成 INDEL和SNP条目
+# INDEL条目
+grep '^#' tmp.vcf | grep 'INDEL'
+grep -v '^#' tmp.vcf | grep 'INDEL' > tmp_INDEL.vcf
+cat tmp_INDEL.vcf | wc -l
+##输出结果：70
+
+# SNP条目
+grep -v '^#' tmp.vcf | grep -v 'INDEL' > tmp_SNP.vcf
+cat tmp_SNP.vcf | wc -l
+##输出结果：36
+
+# ^：在规则表达式中代表行的 "开头" 位置，在[ ]中也与"!"(叹号)一样表示“非”
+#grep '^#' tmp.vcf ：在 tmp.vcf 中选取不含有#的内容
+
+2、统计INDEL和SNP条目的各自的平均测序深度
+# INDEL条目
+cat tmp_INDEL.vcf | cut -f 8 | cut -d ";" -f 4 | awk '{print substr($0, 4)}' | awk '{sum += $0} END {print sum/NR}' 
+##输出结果：40.4429
+#cut -d ";" -f 4 ：把这一列依据;分开并取第四列
+#awk '{print substr($0, 4)}' ：从第一个字段的第4个字符开始截取到最后
+#awk '{sum += $0} END {print sum/NR}：计算文件大小，NR（表示awk开始执行程序后所读取的数据行数）
+
+# SNP条目
+cat  tmp_SNP.vcf | cut -f 8 | cut -d ";" -f 1 | awk '{print substr($0, 4)}' | awk '{sum += $0} END {print sum/NR}'   
+## 输出结果：37
+
+3、把INDEL条目再区分成insertion和deletion情况
+# Deletion
+cat tmp_INDEL.vcf |awk '{if ($4 > $5) print $0}' | less -SN 
+# Insertion
+cat tmp_INDEL.vcf | awk '{if ($4 < $5) print $0}' | less -SN  
+
+4、统计SNP条目的突变组合分布频率
+cat  tmp_SNP.vcf |cut -f 4-5 | tr '\t' '-' | sort | uniq -c
+##输出结果：
+      7 A-C
+      1 A-G
+      4 A-T
+      2 C-A
+      4 C-G
+      3 G-A
+      2 G-C
+      4 G-T
+      6 T-A
+      1 T-C
+      2 T-G
+
+5、找到基因型不是 1/1 的条目及其个数
+grep -v '^#' tmp.vcf |awk '{if($10 !~ "1/1")print}'
+grep -v '^#' tmp.vcf |awk '{if($10 !~ "1/1")print}'|wc -l
+##输出结果：25
+
+6、筛选测序深度大于20的条目
+#查看测序深度位数
+egrep -o "DP=[0-9]+;" tmp.vcf |awk '{print(length($0)-4)}'| sort | uniq -c
+#egrep -o "DP=[0-9]+;"：+表示匹配一个或多个先前的字符，提取文件中DP列，以DP=开头，后接数字（不知道具体几位数字）和;
+#awk '{print(length($0)-4)}'：打印该列从第四位开始的字符长度
+#结果表明测序深度最多只有2位数
+
+#提取DP>20的行
+egrep "DP=2[1-9];|DP=[3-9][0-9];" tmp.vcf |wc -l
+#存在两种情况：
+20<DP<30，为2[1-9]
+30<=DP<=99，为[3-9][0-9]
+
+7、筛选变异位点质量值大于30的条目
+#看第六列
+grep -v '^#' tmp.vcf |awk '{if($6 > 30)print}'|wc -l
+## 输出结果：100
+
+8、组合筛选变异位点质量值大于30并且深度大于20的条目
+grep -v '^#' tmp.vcf |awk '{if($6 > 30)print}' >tmp_QUAL.vcf
+egrep "DP=2[1-9];|DP=[3-9][0-9];" tmp_QUAL.vcf |wc -l
+## 输出结果：98
+
+9、理解DP4=4,7,11,18 这样的字段，就是 Number of high-quality ref-forward , ref-reverse, alt-forward and alt-reverse bases 计算每个变异位点的 AF
+#DP4，高质量测序碱基，4个数字分别对应ref-前，ref-后，alt-前，alt-后
+#理解DP4=4,7,11,18：
+参考序列变异位点之前有4个高质量测序碱基，之后有7个高质量测序碱基;
+变异序列变异位点之前有11个高质量测序碱基，之后有18个高质量测序碱基
+#AF：Allel Frequency 等位基因频率；AF标签属于INFO列
+#查询样本基因型
+grep -v "^#" tmp.vcf | awk '{print$10}' |awk -F":" '{print$1}' | sort | uniq -c 
+## 输出结果：
+     25 0/1
+     81 1/1
+#awk -F":" '{print$1}' ：字段分隔符为: 提取第一列
+
+grep -v "^#" tmp.vcf | awk '{if ($0 ~"1/1"){$8=$8";AF=1";print$0} else if ($0~"0/1"){$8=$8";AF=0.5";print$0}}' > tmp_addAF.vcf
